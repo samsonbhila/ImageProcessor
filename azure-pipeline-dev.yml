@@ -1,0 +1,53 @@
+trigger:
+  - development
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  buildPlatform: 'Any CPU'
+  projectPath: 'CoreAPI/*.csproj'
+  artifactName: 'drop'
+  frontEndUrl: 'dev.cgcsa.invokesolutions.co.za'
+
+steps:
+  - task: UseDotNet@2
+    inputs:
+      version: '8.x'
+      packageType: 'sdk'
+
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'restore'
+      projects: '$(projectPath)'
+
+  - powershell: |
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_FRONT_END_URL', '$(frontEndUrl)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_VALID_PRODUCER', '$(frontEndUrl)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_SECURITY_KEYS', '$(SECURITY_KEYS)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_CONNECT_STRING', '$(CONNECT_STRING)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_STORAGE_CONNECT', '$(VAR_STORAGE_CONNECT)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_STORAGE_CONTAINER', '$(VAR_STORAGE_CONTAINER)') | Set-Content ./ImageProcessor/appsettings.json
+      (Get-Content ./ImageProcessor/appsettings.json).Replace('VAR_SUPPORT_EMAIL', '$(VAR_SUPPORT_EMAIL)') | Set-Content ./ImageProcessor/appsettings.json
+    displayName: 'Create environment file'
+
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'build'
+      projects: '$(projectPath)'
+      arguments: '--configuration $(buildConfiguration) --no-restore'
+
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'publish'
+      publishWebProjects: false
+      projects: '$(projectPath)'
+      arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+      zipAfterPublish: false
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: '$(artifactName)'
+      publishLocation: 'Container'
